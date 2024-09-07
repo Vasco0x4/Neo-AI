@@ -1,0 +1,42 @@
+# LM Studio server key. Usually, you don't need to change this.
+api_key: lm-studio
+
+# Replace with your actual LM Studio server IP address and port.
+api_url: http://127.0.0.1:6959/v1
+
+# This is a sample model. Update the model path if you are using a different model in LM Studio.
+model: lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf
+
+
+# Automatically approve all system commands without asking.
+# For more secure scenarios, keep it `false` and use `require_approval`.
+command_approval:
+  auto_approve_all: false
+
+# Set this to `true` for safer environments where you need to manually approve each command.
+  require_approval: true
+
+
+# Recommendation: DONT TOUCH IF YOU'RE UNSURE
+lm_studio_config:
+  antiprompt:
+  input_prefix: '
+    ### Instruction:
+    '
+  input_suffix: '
+    ### Response:
+    '
+
+
+# Microphone configuration settings
+microphone:
+  # Set the correct index for your microphone.
+  # Recommendation: Run `/docs/tests/test_vocal_device.py` to find the correct microphone index.
+  # If you're not using voice commands, you can leave this as is.
+  index: 5
+
+  # Set the preferred language for voice interactions.
+  # Recommendation: Choose your language based on the language codes supported by the speech recognition system.
+  # You can refer to: 
+  #https://stackoverflow.com/questions/14257598/what-are-language-codes-in-chromes-implementation-of-the-html5-speech-recogniti/14302134#14302134
+  language: en-US
