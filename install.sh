@@ -83,28 +83,18 @@ install_python_packages() {
 setuptools==74.1.2
 openai==0.28
 pyyaml==6.0.1
-speechrecognition==3.10.4
-gtts==2.5.3
 pynput==1.7.7
-PyAudio==0.2.14
+httpx==0.28.1
+PyJWT==2.10.1
 EOL
 
     pip install -r requirements.txt || handle_pyaudio_error
 }
 
-# Function to handle PyAudio installation error
-handle_pyaudio_error() {
-    if [[ $? -ne 0 ]]; then
-        echo "PyAudio installation failed. Attempting to install PortAudio and retry..."
-        install_prerequisites
-        pip install pyaudio
-    fi
-}
-
 # Function to check installed Python packages
 check_python_packages() {
     debug "Checking installed Python packages..."
-    REQUIRED_PKG=("setuptools" "openai" "pyyaml" "speechrecognition" "gtts" "pynput" "PyAudio")
+    REQUIRED_PKG=("setuptools" "openai" "pyyaml" "pynput")
     for pkg in "${REQUIRED_PKG[@]}"; do
         if ! pip show $pkg &>/dev/null; then
             echo "Error: $pkg is not installed correctly."

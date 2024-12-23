@@ -1,0 +1,27 @@
+# Operation Mode
+mode: "digital_ocean"                                     # Options: 'lm_studio' or 'digital_ocean'
+
+# Lm studio Configuration
+api:
+  key: "lm-studio"                                    # Default API key for LM Studio
+  url: "http://192.168.0.27:6959/v1"                 # LM Studio API URL
+  model: "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+
+# DigitalOcean Configuration
+digital_ocean:
+  agent_id: "your-agent-id"                          # DigitalOcean agent ID
+  agent_key: "your-agent-key"                        # Authentication key
+  agent_endpoint: "https://your-endpoint.app/api/v1"  # API endpoint
+  model: "model-name"                                # Model to use
+
+# Security Settings
+security:
+  auto_approve_commands: false                        # Automatic command approval
+  require_approval: true                              # Manual approval requirement
+
+# LM Studio Configuration (Do not modify unless necessary)
+lm_studio:
+  antiprompt: ""
+  prompts:
+    prefix: "### Instruction:"
+    suffix: "### Response:"
