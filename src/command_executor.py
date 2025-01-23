@@ -28,16 +28,30 @@ def extract_system_commands(response):
         response = response[end + len("</system>"):]
     return commands
 
+
 def execute_command_in_terminal(command):
     temp_file = "/tmp/neo_command_output.txt"
-    
+
     if os.path.exists(temp_file):
         os.remove(temp_file)
 
+    desktop_env = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+
     try:
-        subprocess.Popen(
-            ["gnome-terminal", "--", "bash", "-c", f"{command} | tee {temp_file}; echo Done >> {temp_file}; exec bash"]
-        )
+        if "gnome" in desktop_env or "unity" in desktop_env:
+            # GNOME Terminal
+            subprocess.Popen(
+                ["gnome-terminal", "--", "bash", "-c", f"{command} | tee {temp_file}; echo Done >> {temp_file}; exec bash"]
+            )
+        elif "kde" in desktop_env or "plasma" in desktop_env:
+            # KDE Konsole
+            subprocess.Popen(
+                ["konsole", "--hold", "-e", f"bash -c \"{command} | tee {temp_file}; echo Done >> {temp_file}; exec bash\""]
+            )
+        else:
+            print("Error: Unsupported desktop environment.")
+            return None
+
         return temp_file
     except FileNotFoundError:
         print("Error: External terminal not found.")
@@ -45,6 +59,7 @@ def execute_command_in_terminal(command):
     except Exception as e:
         print(f"Error: {e}")
         return None
+
 
 def wait_for_command_completion(temp_file):
     start_time = time.time()
