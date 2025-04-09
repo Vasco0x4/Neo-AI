@@ -190,9 +190,9 @@ class ImprovedTerminalUI:
                     self.print_banner()
 
                 else:
-                    # Send query to Neo AI
-                    print_formatted_text(HTML('<output>Thinking...</output>'), style=NEO_STYLE)
-                    self.neo_ai.query(user_input)
+                    print_formatted_text(HTML('<output>Thinking...</output>'), style=NEO_STYLE, end='\r')
+
+                    self.neo_ai.query(user_input, clear_thinking=True)
 
             except KeyboardInterrupt:
                 print_formatted_text(HTML('\n<ansired>Interrupted. Type "exit" to quit.</ansired>'), style=NEO_STYLE)

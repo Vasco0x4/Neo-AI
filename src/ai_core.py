@@ -93,7 +93,7 @@ class NeoAI:
         self.context_initialized = True
         return full_context
 
-    def _query_lm_studio(self, prompt):
+    def _query_lm_studio(self, prompt, clear_thinking=False):
         instruction = f"{self.lm_studio_config.get('input_prefix', '### Instruction:')} {prompt} {self.lm_studio_config.get('input_suffix', '### Response:')}"
 
         messages = self.history.copy()
@@ -116,6 +116,8 @@ class NeoAI:
                     content = chunk['choices'][0]['delta'].get('content', '')
                     if content:
                         if is_first_chunk:
+                            if clear_thinking:
+                                print('\r' + ' ' * 30 + '\r', end="", flush=True)
                             print("\033[1;34mNeo:\033[0m ", end='', flush=True)
                             is_first_chunk = False
 
@@ -138,7 +140,7 @@ class NeoAI:
             print(f"Error while querying LM Studio: {e}")
             return "An error occurred while querying LM Studio."
 
-    def _query_digitalocean(self, prompt):
+    def _query_digitalocean(self, prompt, clear_thinking=False):
         self._ensure_valid_token()
 
         headers = {
@@ -180,6 +182,8 @@ class NeoAI:
                                     content = chunk["choices"][0].get("delta", {}).get("content", "")
                                     if content:
                                         if is_first_chunk:
+                                            if clear_thinking:
+                                                print('\r' + ' ' * 30 + '\r', end="", flush=True)
                                             print("\033[1;34mNeo:\033[0m ", end="", flush=True)
                                             is_first_chunk = False
                                         print(content, end="", flush=True)
@@ -233,7 +237,7 @@ class NeoAI:
 
         return "Sorry, I couldn't get a response. Please try again."
 
-    def query(self, prompt):
+    def query(self, prompt, clear_thinking=False):
         try:
             if not self.context_initialized:
                 context = self.initialize_context()
@@ -242,15 +246,15 @@ class NeoAI:
             self.history.append({"role": "user", "content": prompt})
 
             if self.mode == 'digital_ocean':
-                return self._query_digitalocean(prompt)
+                return self._query_digitalocean(prompt, clear_thinking)
             else:
-                response = self._query_lm_studio(prompt)
+                response = self._query_lm_studio(prompt, clear_thinking)
                 if response:
                     self.history.append({"role": "assistant", "content": response})
                 return response
         except Exception as e:
             import traceback
-            print(f"Detailed error: {e}")
+            print(f"Details: {e}")
             print(traceback.format_exc())
 
     def _process_response(self, response):
