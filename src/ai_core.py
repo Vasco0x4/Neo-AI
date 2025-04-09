@@ -101,6 +101,12 @@ class NeoAI:
             return "An error occurred while querying LM Studio."
 
     def _query_digitalocean(self, prompt):
+        try:
+            self.access_token = self.token_manager.get_valid_access_token()
+        except Exception as e:
+            print(f"\nErrror refresh token: {str(e)}")
+            return None
+
         headers = {
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
@@ -205,7 +211,12 @@ class NeoAI:
                         self.history.append({"role": "user", "content": follow_up_prompt})
 
                         if self.mode == "digital_ocean":
-                            return self._query_digitalocean(follow_up_prompt)
+                            try:
+                                self.access_token = self.token_manager.get_valid_access_token()
+                                return self._query_digitalocean(follow_up_prompt)
+                            except Exception as e:
+                                print(f"\nError refresh token: {str(e)}")
+                                return "Error: Token refresh failed after command execution. Please try again."
                         elif self.mode == "lm_studio":
                             return self._query_lm_studio(follow_up_prompt)
                         else:
@@ -214,7 +225,7 @@ class NeoAI:
                         return "Error: Failed to execute the command in an external terminal."
 
         except Exception as e:
-            print(f"\nUne erreur inattendue s'est produite lors du traitement de la réponse : {e}")
+            print(f"\nError{e}")
             return "An error occurred while processing the system command."
 
         return response.strip()
