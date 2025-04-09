@@ -11,7 +11,6 @@ from src.token_manager import TokenManager
 from src.command_executor import wait_for_command_completion
 from src.approval_handler import ApprovalHandler
 
-# Désactiver les proxy d'environnement qui causent des problèmes
 os.environ.pop('http_proxy', None)
 os.environ.pop('https_proxy', None)
 os.environ.pop('HTTP_PROXY', None)
@@ -139,7 +138,6 @@ class NeoAI:
             return "An error occurred while querying LM Studio."
 
     def _query_digitalocean(self, prompt):
-        # Vérifier et rafraîchir le token si nécessaire
         self._ensure_valid_token()
 
         headers = {
@@ -198,7 +196,6 @@ class NeoAI:
 
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 401 and retry_count < max_retries:
-                    print("\nErreur d'authentification. Renouvellement du token...")
                     retry_count += 1
                     # Force token refresh
                     self.token_manager = TokenManager(
@@ -213,12 +210,10 @@ class NeoAI:
                     headers["Authorization"] = f"Bearer {self.access_token}"
                     continue
                 else:
-                    print(f"\nErreur HTTP lors de la requête.")
                     print(f"Détails: {e}")
                     break
 
             except httpx.ReadTimeout:
-                print("\nLa requête a pris trop de temps. Renouvellement du token et nouvelle tentative...")
                 retry_count += 1
                 if retry_count < max_retries:
                     self.access_token = self.token_manager.get_valid_access_token()
@@ -261,8 +256,8 @@ class NeoAI:
         try:
             hooks = parse_hooks(response)
             for hook_type, content in hooks:
-                if hook_type == "s" or hook_type == "system":  # Accepter les deux types de tags
-                    # Utiliser le gestionnaire d'approbation amélioré
+                if hook_type == "s" or hook_type == "system":  # Accept both tag types
+                    # Use the approval handler
                     approval_handler = ApprovalHandler(self.require_approval, self.auto_approve_all)
                     approved, option = approval_handler.request_approval(content)
 
@@ -271,12 +266,12 @@ class NeoAI:
                     elif option == 'all':
                         self.auto_approve_all = True
 
-                    # Exécuter la commande dans un terminal externe
+                    # Execute the command with the new executor
                     temp_file = execute_command_in_terminal(content)
                     if temp_file:
                         result = wait_for_command_completion(temp_file)
 
-                        # Envoyer le résultat comme un nouveau message
+                        # Send the result as a new message
                         follow_up_prompt = f"The command '{content}' was executed. Here is the result:\n{result}"
                         self.history.append({"role": "user", "content": follow_up_prompt})
 
@@ -287,10 +282,12 @@ class NeoAI:
                         else:
                             return f"Unknown mode: {self.mode}. Unable to send follow-up prompt."
                     else:
-                        return "Error: Failed to execute the command in an external terminal."
+                        return "Error: Failed to execute the command."
 
         except Exception as e:
-            print(f"\nUne erreur inattendue s'est produite lors du traitement de la réponse : {e}")
+            import traceback
+            print(f"\nAn unexpected error occurred while processing the response: {e}")
+            print(traceback.format_exc())
             return "An error occurred while processing the system command."
 
         return response.strip()
