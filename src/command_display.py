@@ -30,7 +30,7 @@ class CommandDisplay:
         self.term_width = shutil.get_terminal_size().columns
 
         # Patterns for formatting
-        self.cmd_pattern = re.compile(r'<system>(.*?)</system>', re.DOTALL)
+        self.cmd_pattern = re.compile(r'<s>(.*?)</s>', re.DOTALL)
         self.error_pattern = re.compile(r'Error:|ERROR:|Failed:', re.IGNORECASE)
         self.success_pattern = re.compile(r'Success:|Completed:|Done:', re.IGNORECASE)
         self.warning_pattern = re.compile(r'Warning:|WARN:|Caution:', re.IGNORECASE)
@@ -78,7 +78,7 @@ class CommandDisplay:
         """Print a notification that a command is being executed."""
         formatted_cmd = self.format_command(command)
         print_formatted_text(HTML(formatted_cmd), style=OUTPUT_STYLE)
-        print_formatted_text(HTML("<system>Executing command...</system>"), style=OUTPUT_STYLE)
+        print_formatted_text(HTML("<s>Executing command...</s>"), style=OUTPUT_STYLE)
 
     def print_command_output(self, output, command):
         """Print the formatted output of a command."""
@@ -86,12 +86,12 @@ class CommandDisplay:
         print_formatted_text(HTML(formatted_output), style=OUTPUT_STYLE)
 
     def extract_commands(self, text):
-        """Extract commands from <system> tags in a text."""
+        """Extract commands from <s> tags in a text."""
         commands = self.cmd_pattern.findall(text)
         return commands
 
     def replace_tags_with_display(self, text):
-        """Replace <system> tags with visually formatted command displays."""
+        """Replace <s> tags with visually formatted command displays."""
         def replacement(match):
             cmd = match.group(1).strip()
             return f"\n**Command:** `{cmd}`\n"
@@ -126,7 +126,7 @@ class CommandDisplay:
             padding = " " * (box_width - 4 - len(line))
             message.append(f"│ <command>{line}</command>{padding} │")
         message.append("│" + " " * (box_width - 2) + "│")
-        message.append("│ <system>Approve? (y/n/T for approve all)</system>" + " " * (box_width - 37) + "│")
+        message.append("│ <s>Approve? (y/n/T for approve all)</s>" + " " * (box_width - 37) + "│")
         message.append(bottom_border)
 
         return "\n".join(message)

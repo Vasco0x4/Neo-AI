@@ -105,7 +105,7 @@ class PersistentTerminalExecutor:
             script_path = os.path.join(self.temp_dir, "neo_terminal_script.sh")
             with open(script_path, 'w') as f:
                 f.write('''#!/bin/bash
-echo "$$" > %s
+echo "$" > %s
 echo "Neo AI Terminal - DO NOT CLOSE THIS WINDOW"
 echo "This terminal will be used for all Neo AI commands."
 echo "---------------------------------------------------"

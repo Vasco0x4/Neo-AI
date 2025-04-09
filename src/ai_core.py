@@ -11,6 +11,7 @@ from src.token_manager import TokenManager
 from src.command_executor import wait_for_command_completion
 from src.approval_handler import ApprovalHandler
 
+# Clear all proxy environment variables
 os.environ.pop('http_proxy', None)
 os.environ.pop('https_proxy', None)
 os.environ.pop('HTTP_PROXY', None)
@@ -52,11 +53,11 @@ class NeoAI:
         self.context_initialized = False
 
     def _ensure_valid_token(self):
-        """Vérifier que le token est toujours valide et le renouveler si nécessaire"""
+        """Check that the token is still valid and renew it if necessary"""
         if self.mode != 'digital_ocean':
             return
 
-        # On vérifie le token toutes les 15 minutes ou en cas d'erreur 401
+        # Check token every 15 minutes or in case of 401 error
         current_time = time.time()
         token_age = current_time - self.token_timestamp
 
@@ -67,7 +68,7 @@ class NeoAI:
                 self.token_timestamp = current_time
             except Exception as e:
                 logging.error(f"Error refreshing token: {e}")
-                # On tente de réinitialiser complètement la gestion des tokens
+                # Attempt to completely reset token management
                 self.token_manager = TokenManager(
                     agent_id=self.config['digital_ocean_config']['agent_id'],
                     agent_key=self.config['digital_ocean_config']['agent_key'],
@@ -134,7 +135,7 @@ class NeoAI:
                 return full_response.strip()
 
         except Exception as e:
-            print(f"Erreur lors de la requête à LM Studio : {e}")
+            print(f"Error while querying LM Studio: {e}")
             return "An error occurred while querying LM Studio."
 
     def _query_digitalocean(self, prompt):
@@ -206,11 +207,11 @@ class NeoAI:
                     self.access_token = self.token_manager.get_valid_access_token()
                     self.token_timestamp = time.time()
 
-                    # Mettre à jour l'en-tête avec le nouveau token
+                    # Update header with new token
                     headers["Authorization"] = f"Bearer {self.access_token}"
                     continue
                 else:
-                    print(f"Détails: {e}")
+                    print(f"Details: {e}")
                     break
 
             except httpx.ReadTimeout:
@@ -221,16 +222,16 @@ class NeoAI:
                     headers["Authorization"] = f"Bearer {self.access_token}"
                     continue
                 else:
-                    print("Échec après plusieurs tentatives.")
+                    print("Failed after multiple attempts.")
                     break
 
             except Exception as e:
                 import traceback
-                print(f"\nErreur détaillée: {e}")
+                print(f"\nDetailed error: {e}")
                 print(traceback.format_exc())
                 break
 
-        return "Désolé, je n'ai pas pu obtenir une réponse. Veuillez réessayer."
+        return "Sorry, I couldn't get a response. Please try again."
 
     def query(self, prompt):
         try:
@@ -249,7 +250,7 @@ class NeoAI:
                 return response
         except Exception as e:
             import traceback
-            print(f"Erreur détaillée: {e}")
+            print(f"Detailed error: {e}")
             print(traceback.format_exc())
 
     def _process_response(self, response):
