@@ -1,36 +1,98 @@
+"""
+Enhanced command executor for Neo AI.
+This module handles the execution of system commands with improved display and security.
+"""
+
 import subprocess
 import shlex
-import subprocess
 import time
 import os
+import re
+import logging
+from prompt_toolkit import print_formatted_text, HTML
+from src.command_display import CommandDisplay
+
+# Initialize command display
+display = CommandDisplay()
+
 
 def execute_command(command):
+    """
+    Execute a command and return its output.
+
+    Args:
+        command (str): Command to execute
+
+    Returns:
+        str: Command output or error message
+    """
     try:
-        if any(char in command for char in ['|', '>', '<', '&']):
+        # Log the command
+        logging.debug(f"Executing command: {command}")
+
+        # Determine if command needs shell
+        needs_shell = any(char in command for char in ['|', '>', '<', '&', ';', '*', '`'])
+
+        # Execute the command
+        if needs_shell:
             result = subprocess.run(command, capture_output=True, text=True, shell=True, timeout=30)
         else:
             args = shlex.split(command)
             result = subprocess.run(args, capture_output=True, text=True, timeout=30)
 
-        return result.stdout if result.returncode == 0 else f"Error: {result.stderr}"
+        # Return the result
+        if result.returncode == 0:
+            return result.stdout
+        else:
+            return f"Error: Command failed with exit code {result.returncode}\n{result.stderr}"
+
     except subprocess.TimeoutExpired:
-        return "Error: Command execution timed out"
+        return "Error: Command execution timed out after 30 seconds"
+    except FileNotFoundError:
+        return f"Error: Command not found: {command.split()[0]}"
+    except PermissionError:
+        return f"Error: Permission denied when executing: {command}"
     except Exception as e:
         return f"Error: {str(e)}"
 
+
 def extract_system_commands(response):
+    """
+    Extract commands from <system> tags in the response.
+
+    Args:
+        response (str): Text containing commands in <system> tags
+
+    Returns:
+        list: List of extracted commands
+    """
     commands = []
-    while "<system>" in response and "</system>" in response:
-        start = response.index("<system>") + len("<system>")
-        end = response.index("</system>")
-        command = response[start:end].strip()
-        commands.append(command)
-        response = response[end + len("</system>"):]
-    return commands
+
+    # Try with <system> tags first (original format)
+    system_pattern = re.compile(r'<system>(.*?)</system>', re.DOTALL)
+    commands.extend(system_pattern.findall(response))
+
+    # Also try with <s> tags (new format for better display)
+    s_pattern = re.compile(r'<s>(.*?)</s>', re.DOTALL)
+    commands.extend(s_pattern.findall(response))
+
+    return [cmd.strip() for cmd in commands]
 
 
 def execute_command_in_terminal(command):
+    """
+    Execute a command in an external terminal and save output to file.
+
+    Args:
+        command (str): Command to execute
+
+    Returns:
+        str: Path to the output file or None on failure
+    """
     temp_file = "/tmp/neo_command_output.txt"
+
+    # Display the command being executed
+    display.print_command_execution(command)
 
     if os.path.exists(temp_file):
         os.remove(temp_file)
@@ -39,41 +101,94 @@ def execute_command_in_terminal(command):
 
     try:
         if "gnome" in desktop_env or "unity" in desktop_env:
-            # GNOME Terminal
-            subprocess.Popen(
-                ["gnome-terminal", "--", "bash", "-c", f"{command} | tee {temp_file}; echo Done >> {temp_file}; exec bash"]
+            # GNOME Terminal with enhanced styling
+            term_cmd = (
+                f"gnome-terminal -- bash -c '"
+                f"echo \"\\e[1;33m[Neo Command]\\e[0m {command}\\n\\e[34m[Output]\\e[0m\" && "
+                f"{command} 2>&1 | tee {temp_file}; "
+                f"echo \"\\e[32m[Command completed]\\e[0m\" >> {temp_file}; "
+                f"echo \"Done\" >> {temp_file}; exec bash'"
             )
+            subprocess.Popen(term_cmd, shell=True)
+
         elif "kde" in desktop_env or "plasma" in desktop_env:
-            # KDE Konsole
-            subprocess.Popen(
-                ["konsole", "--hold", "-e", f"bash -c \"{command} | tee {temp_file}; echo Done >> {temp_file}; exec bash\""]
+            # KDE Konsole with enhanced styling
+            term_cmd = (
+                f"konsole --hold -e bash -c '"
+                f"echo -e \"\\e[1;33m[Neo Command]\\e[0m {command}\\n\\e[34m[Output]\\e[0m\" && "
+                f"{command} 2>&1 | tee {temp_file}; "
+                f"echo -e \"\\e[32m[Command completed]\\e[0m\" >> {temp_file}; "
+                f"echo \"Done\" >> {temp_file}; exec bash'"
             )
+            subprocess.Popen(term_cmd, shell=True)
+
+        elif "xfce" in desktop_env:
+            # XFCE Terminal
+            term_cmd = (
+                f"xfce4-terminal --hold -e 'bash -c \""
+                f"echo -e \\\"\\e[1;33m[Neo Command]\\e[0m {command}\\n\\e[34m[Output]\\e[0m\\\" && "
+                f"{command} 2>&1 | tee {temp_file}; "
+                f"echo -e \\\"\\e[32m[Command completed]\\e[0m\\\" >> {temp_file}; "
+                f"echo \\\"Done\\\" >> {temp_file}; exec bash\"'"
+            )
+            subprocess.Popen(term_cmd, shell=True)
+
         else:
-            print("Error: Unsupported desktop environment.")
-            return None
+            # Fallback to more basic terminal
+            term_cmd = f"x-terminal-emulator -e 'bash -c \"{command} | tee {temp_file}; echo Done >> {temp_file}; exec bash\"'"
+            subprocess.Popen(term_cmd, shell=True)
 
         return temp_file
     except FileNotFoundError:
-        print("Error: External terminal not found.")
-        return None
+        print_formatted_text(HTML("<e>Error: External terminal not found.</e>"))
+        # Fallback to direct execution
+        try:
+            result = execute_command(command)
+            with open(temp_file, "w") as f:
+                f.write(result)
+                f.write("\nDone")
+            return temp_file
+        except Exception as e:
+            print_formatted_text(HTML(f"<e>Error executing command: {e}</e>"))
+            return None
     except Exception as e:
-        print(f"Error: {e}")
+        print_formatted_text(HTML(f"<e>Error: {e}</e>"))
         return None
 
 
 def wait_for_command_completion(temp_file):
+    """
+    Wait for a command to complete and read its output.
+
+    Args:
+        temp_file (str): Path to the output file
+
+    Returns:
+        str: Command output
+    """
     start_time = time.time()
     notified_long_execution = False
+    animation_frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+    frame_index = 0
 
     while True:
         if os.path.exists(temp_file):
             with open(temp_file, "r") as f:
                 content = f.read()
                 if "Done" in content:
+                    print_formatted_text(HTML("<s>Command completed.</s>"))
                     return content.replace("Done", "").strip()
 
-        if not notified_long_execution and time.time() - start_time > 30:
-            print("\033[1;33m[System]\033[0m Command is taking longer than expected. Please wait...")
+        elapsed_time = time.time() - start_time
+
+        if elapsed_time > 60 and not notified_long_execution:
+            print_formatted_text(HTML("<w>Command is taking longer than expected. (>1 min)</w>"))
             notified_long_execution = True
 
-        time.sleep(1)
+        # Every 0.2 seconds, update the animation
+        if int(elapsed_time * 5) % len(animation_frames) != frame_index:
+            frame_index = int(elapsed_time * 5) % len(animation_frames)
+            # Clear the line and print the new frame
+            print(f"\r{animation_frames[frame_index]} Waiting for command completion... ({int(elapsed_time)}s)", end="")
+
+        time.sleep(0.1)
