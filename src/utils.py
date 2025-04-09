@@ -16,8 +16,23 @@ def load_persistent_memory():
     with open(memory_file, "r") as f:
         return f.read()
 
+
 def parse_hooks(text):
-  pattern = r'<(\w+)>(.*?)</\1>'
-  return re.findall(pattern, text, re.DOTALL)
+    """Parse hooks like <system> or <s> tags in text."""
+    # Support both <system> and <s> tags
+    patterns = [
+        r'<(\w+)>(.*?)</\1>',  # Generic pattern for all tags
+    ]
 
+    hooks = []
+    for pattern in patterns:
+        matches = re.findall(pattern, text, re.DOTALL)
+        for match in matches:
+            # Si c'est un tag system ou s, on le considère comme une commande système
+            tag_type, content = match
+            if tag_type in ["system", "s"]:
+                hooks.append(("s", content.strip()))
+            else:
+                hooks.append((tag_type, content.strip()))
 
+    return hooks

@@ -64,13 +64,21 @@ class ImprovedTerminalUI:
             with open(history_file, 'w') as f:
                 pass
 
+        # Create a custom completer that only works at the beginning of the line
+        class CommandStartCompleter(WordCompleter):
+            def get_completions(self, document, complete_event):
+                # Only complete if we're at the start of the line or within the first word
+                text_before_cursor = document.text_before_cursor
+                if not text_before_cursor.strip() or ' ' not in text_before_cursor:
+                    yield from super().get_completions(document, complete_event)
+
         self.session = PromptSession(
             history=FileHistory(history_file),
             auto_suggest=AutoSuggestFromHistory(),
             key_bindings=kb,
             style=NEO_STYLE,
             complete_while_typing=True,
-            completer=WordCompleter(self.commands)
+            completer=CommandStartCompleter(self.commands)
         )
 
         # Define patterns for command highlighting
@@ -80,16 +88,7 @@ class ImprovedTerminalUI:
     def print_banner(self):
         """Print Neo AI welcome banner."""
         banner = """
-┌─────────────────────────────────────────────┐
-│                                             │
-│             🧠 Neo AI Terminal 🧠            │
-│                                             │
-│     Your intelligent Linux command line     │
-│     assistant is ready to help you.         │
-│                                             │
-│     Type 'help' for available commands      │
-│                                             │
-└─────────────────────────────────────────────┘
+       Welcome to Neo AI Terminal !                    
         """
         print_formatted_text(HTML(f'<ansicyan>{banner}</ansicyan>'))
 

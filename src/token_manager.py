@@ -1,10 +1,10 @@
+# The token is used to authenticate with the DigitalOcean API
 import httpx
 import jwt
 import json
 import os
 import logging
 import tempfile
-import urllib.parse
 
 logging.disable(logging.CRITICAL)  # Disable for logging
 
@@ -21,10 +21,9 @@ class TokenManager:
     def _request(self, method, endpoint, headers=None, params=None, data=None):
         try:
             url = f"{self.auth_api_url}{endpoint}"
-
-            client = httpx.Client(transport=httpx.HTTPTransport(proxy=None))
-
-            response = client.request(method, url, headers=headers, params=params, json=data)
+            # Utiliser httpx.request directement au lieu de créer un client
+            # La méthode permet de contourner l'utilisation des proxys
+            response = httpx.request(method, url, headers=headers, params=params, json=data)
             response.raise_for_status()
             return response.json()
         except httpx.RequestError as e:

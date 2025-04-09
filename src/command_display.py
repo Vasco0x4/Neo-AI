@@ -13,14 +13,13 @@ from prompt_toolkit.styles import Style
 # Define output style
 OUTPUT_STYLE = Style.from_dict({
     'command': '#ffb347 bold',  # Orange
-    'output': '#87ceeb',  # Sky Blue
-    'error': '#ff6b6b',  # Soft Red
-    'success': '#98fb98',  # Pale Green
-    'warning': '#ffa07a',  # Light Salmon
-    'system': '#d8bfd8 italic',  # Thistle
-    'highlight': '#40e0d0',  # Turquoise
+    'output': '#87ceeb',        # Sky Blue
+    'error': '#ff6b6b',         # Soft Red
+    'success': '#98fb98',       # Pale Green
+    'warning': '#ffa07a',       # Light Salmon
+    'system': '#d8bfd8 italic', # Thistle
+    'highlight': '#40e0d0',     # Turquoise
 })
-
 
 class CommandDisplay:
     """Handle display formatting for commands and their outputs."""
@@ -93,7 +92,6 @@ class CommandDisplay:
 
     def replace_tags_with_display(self, text):
         """Replace <system> tags with visually formatted command displays."""
-
         def replacement(match):
             cmd = match.group(1).strip()
             return f"\n**Command:** `{cmd}`\n"

@@ -15,7 +15,6 @@ from src.command_display import CommandDisplay
 # Initialize command display
 display = CommandDisplay()
 
-
 def execute_command(command):
     """
     Execute a command and return its output.
@@ -55,7 +54,6 @@ def execute_command(command):
     except Exception as e:
         return f"Error: {str(e)}"
 
-
 def extract_system_commands(response):
     """
     Extract commands from <system> tags in the response.
@@ -77,7 +75,6 @@ def extract_system_commands(response):
     commands.extend(s_pattern.findall(response))
 
     return [cmd.strip() for cmd in commands]
-
 
 def execute_command_in_terminal(command):
     """
@@ -101,23 +98,19 @@ def execute_command_in_terminal(command):
 
     try:
         if "gnome" in desktop_env or "unity" in desktop_env:
-            # GNOME Terminal with enhanced styling
+            # GNOME Terminal with minimal styling
             term_cmd = (
                 f"gnome-terminal -- bash -c '"
-                f"echo \"\\e[1;33m[Neo Command]\\e[0m {command}\\n\\e[34m[Output]\\e[0m\" && "
                 f"{command} 2>&1 | tee {temp_file}; "
-                f"echo \"\\e[32m[Command completed]\\e[0m\" >> {temp_file}; "
                 f"echo \"Done\" >> {temp_file}; exec bash'"
             )
             subprocess.Popen(term_cmd, shell=True)
 
         elif "kde" in desktop_env or "plasma" in desktop_env:
-            # KDE Konsole with enhanced styling
+            # KDE Konsole with minimal styling
             term_cmd = (
                 f"konsole --hold -e bash -c '"
-                f"echo -e \"\\e[1;33m[Neo Command]\\e[0m {command}\\n\\e[34m[Output]\\e[0m\" && "
                 f"{command} 2>&1 | tee {temp_file}; "
-                f"echo -e \"\\e[32m[Command completed]\\e[0m\" >> {temp_file}; "
                 f"echo \"Done\" >> {temp_file}; exec bash'"
             )
             subprocess.Popen(term_cmd, shell=True)
@@ -126,10 +119,8 @@ def execute_command_in_terminal(command):
             # XFCE Terminal
             term_cmd = (
                 f"xfce4-terminal --hold -e 'bash -c \""
-                f"echo -e \\\"\\e[1;33m[Neo Command]\\e[0m {command}\\n\\e[34m[Output]\\e[0m\\\" && "
                 f"{command} 2>&1 | tee {temp_file}; "
-                f"echo -e \\\"\\e[32m[Command completed]\\e[0m\\\" >> {temp_file}; "
-                f"echo \\\"Done\\\" >> {temp_file}; exec bash\"'"
+                f"echo \"Done\" >> {temp_file}; exec bash\"'"
             )
             subprocess.Popen(term_cmd, shell=True)
 
@@ -176,19 +167,19 @@ def wait_for_command_completion(temp_file):
             with open(temp_file, "r") as f:
                 content = f.read()
                 if "Done" in content:
-                    print_formatted_text(HTML("<s>Command completed.</s>"))
+                    # No message needed - let the output speak for itself
                     return content.replace("Done", "").strip()
 
         elapsed_time = time.time() - start_time
 
         if elapsed_time > 60 and not notified_long_execution:
-            print_formatted_text(HTML("<w>Command is taking longer than expected. (>1 min)</w>"))
+            print(f"\r⏳ Command taking longer than expected... ({int(elapsed_time)}s)", end="")
             notified_long_execution = True
 
         # Every 0.2 seconds, update the animation
         if int(elapsed_time * 5) % len(animation_frames) != frame_index:
             frame_index = int(elapsed_time * 5) % len(animation_frames)
-            # Clear the line and print the new frame
-            print(f"\r{animation_frames[frame_index]} Waiting for command completion... ({int(elapsed_time)}s)", end="")
+            # Clear the line and print the new frame - keep it minimal
+            print(f"\r{animation_frames[frame_index]} {int(elapsed_time)}s", end="")
 
         time.sleep(0.1)
