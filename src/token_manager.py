@@ -1,12 +1,13 @@
-# The token is used to authenticate with the DigitalOcean API
 import httpx
 import jwt
 import json
 import os
 import logging
 import tempfile
+import urllib.parse
 
-logging.disable(logging.CRITICAL) # Disable for logging 
+logging.disable(logging.CRITICAL)  # Disable for logging
+
 
 class TokenManager:
     def __init__(self, agent_id, agent_key, auth_api_url):
@@ -20,7 +21,10 @@ class TokenManager:
     def _request(self, method, endpoint, headers=None, params=None, data=None):
         try:
             url = f"{self.auth_api_url}{endpoint}"
-            response = httpx.request(method, url, headers=headers, params=params, json=data)
+
+            client = httpx.Client(transport=httpx.HTTPTransport(proxy=None))
+
+            response = client.request(method, url, headers=headers, params=params, json=data)
             response.raise_for_status()
             return response.json()
         except httpx.RequestError as e:
@@ -59,26 +63,18 @@ class TokenManager:
         except Exception as e:
             logging.error(f"Error while validating token: {e}")
             return True
-        
-    def _load_tokens_from_cache(self):
-        if os.path.exists(self.cache_file):
-            try:
-                with open(self.cache_file, "r") as f:
-                    tokens = json.load(f)
-                    if self._is_token_expired(tokens.get("access_token")) and self._is_token_expired(tokens.get("refresh_token")):
-                        logging.warning("Both access and refresh tokens are expired. Clearing cache.")
-                        os.remove(self.cache_file)
-                        return None
-                    return tokens
-            except json.JSONDecodeError:
-                logging.warning("Cache file is corrupted. Ignoring it.")
-        return None
 
     def _load_tokens_from_cache(self):
         if os.path.exists(self.cache_file):
             try:
                 with open(self.cache_file, "r") as f:
-                    return json.load(f)
+                    tokens = json.load(f)
+                    if self._is_token_expired(tokens.get("access_token")) and self._is_token_expired(
+                            tokens.get("refresh_token")):
+                        logging.warning("Both access and refresh tokens are expired. Clearing cache.")
+                        os.remove(self.cache_file)
+                        return None
+                    return tokens
             except json.JSONDecodeError:
                 logging.warning("Cache file is corrupted. Ignoring it.")
         return None

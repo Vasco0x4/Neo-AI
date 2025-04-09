@@ -12,6 +12,7 @@ logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %
 
 from src.token_manager import TokenManager
 
+
 class NeoAI:
     def __init__(self, config):
         self.mode = config.get('mode', 'lm_studio')
@@ -45,7 +46,7 @@ class NeoAI:
         ]
         context_data = load_persistent_memory()
         initial_context = "<context>\n"
-        
+
         for command in context_commands:
             result = execute_command(command)
             initial_context += f"Command: {command}\nResult:\n{result}\n"
@@ -96,7 +97,7 @@ class NeoAI:
                 return full_response.strip()
 
         except Exception as e:
-            print(f"Erreur lors de la requête à LM Studio : {e}")
+            print(f"Error LM Studio : {e}")
             return "An error occurred while querying LM Studio."
 
     def _query_digitalocean(self, prompt):
@@ -111,11 +112,14 @@ class NeoAI:
         }
 
         try:
-            with httpx.stream(
-                "POST",
-                f"{self.agent_endpoint}/chat/completions",
-                json=payload,
-                headers=headers,
+            transport = httpx.HTTPTransport(proxy=None)
+            client = httpx.Client(transport=transport)
+
+            with client.stream(
+                    "POST",
+                    f"{self.agent_endpoint}/chat/completions",
+                    json=payload,
+                    headers=headers,
             ) as response:
                 response.raise_for_status()
 
@@ -147,11 +151,13 @@ class NeoAI:
                 if assistant_response.strip():
                     self.history.append({"role": "assistant", "content": assistant_response.strip()})
                     return self._process_response(assistant_response.strip())
-        except httpx.HTTPStatusError as e:
-            print("\nErreur HTTP lors de la requête.")
-        except Exception as e:
-            print("\nUne erreur inattendue s'est produite.")
 
+        except httpx.HTTPStatusError as e:
+            print("\nErreur HTTP.")
+            print(f"Details: {str(e)}")
+        except Exception as e:
+            print("\nError.")
+            print(f"Details: {str(e)}")
 
     def query(self, prompt):
         try:
@@ -163,13 +169,12 @@ class NeoAI:
 
             if self.mode == 'digital_ocean':
                 self._query_digitalocean(prompt)
-            else: 
+            else:
                 response = self._query_lm_studio(prompt)
                 if response:
                     self.history.append({"role": "assistant", "content": response})
         except Exception as e:
             print(f"Erreur: {e}")
-
 
     def _process_response(self, response):
         try:
@@ -178,7 +183,9 @@ class NeoAI:
                 if hook_type == "system":
                     if self.require_approval and not self.auto_approve_all:
                         print("\n" + "=" * 50)
-                        print(f"\033[1;33m[Approval Required]\033[0m Neo wants to execute: {content}. Approve? (y/n/T for approve all): ", end='')
+                        print(
+                            f"\033[1;33m[Approval Required]\033[0m Neo wants to execute: {content}. Approve? (y/n/T for approve all): ",
+                            end='')
                         approval = input().strip().lower()
                         print("=" * 50 + "\n")
 
@@ -189,13 +196,11 @@ class NeoAI:
                             self.auto_approve_all = True
                             print("\033[1;33m[System]\033[0m All future commands will be automatically approved.")
 
-                    # Exécuter la commande dans un terminal externe
                     temp_file = execute_command_in_terminal(content)
                     if temp_file:
                         print("[System] Command sent.")
                         result = wait_for_command_completion(temp_file)
 
-                        # Envoyer le résultat comme un nouveau message
                         follow_up_prompt = f"The command '{content}' was executed. Here is the result:\n{result}"
                         self.history.append({"role": "user", "content": follow_up_prompt})
 
@@ -213,10 +218,6 @@ class NeoAI:
             return "An error occurred while processing the system command."
 
         return response.strip()
-
-
-
-
 
     def _get_ai_response(self, instruction):
         messages = self.history + [{"role": "user", "content": instruction}]
