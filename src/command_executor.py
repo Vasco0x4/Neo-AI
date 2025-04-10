@@ -265,7 +265,7 @@ done
                 with open(self.pid_file, 'r') as f:
                     pid = f.read().strip()
                 #logging.info(f"Persistent terminal initialized successfully. PID: {pid}")
-                print_formatted_text(HTML(f"<ansigreen>Persistent terminal initialized successfully. PID: {pid}</ansigreen>"))
+                #print_formatted_text(HTML(f"<ansigreen>Persistent terminal initialized successfully. PID: {pid}</ansigreen>"))
                 self.terminal_initialized = True
             else:
                 logging.error("Failed to initialize persistent terminal.")
@@ -403,7 +403,7 @@ done
             if is_sudo:
                 print_formatted_text(HTML(f"<ansiyellow>Executing command with elevated privileges:</ansiyellow> <ansiblue>{command}</ansiblue>"))
             else:
-                print_formatted_text(HTML(f"<ansiyellow>Executing in persistent terminal:</ansiyellow> <ansiblue>{command}</ansiblue>"))
+                print_formatted_text(HTML(f"<ansiyellow>Executing in terminal:</ansiyellow> <ansiblue>{command}</ansiblue>"))
 
             # Send command to terminal via FIFO
             with open(self.fifo_path, 'w') as f:
