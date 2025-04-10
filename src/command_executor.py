@@ -67,9 +67,9 @@ class PersistentTerminalExecutor:
         for terminal_cmd, launch_cmd in terminals:
             try:
                 result = subprocess.run(["which", terminal_cmd],
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE,
-                                       check=False)
+                                      stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE,
+                                      check=False)
                 if result.returncode == 0:
                     return launch_cmd
             except Exception:
@@ -87,8 +87,18 @@ class PersistentTerminalExecutor:
             with open(self.pid_file, 'r') as f:
                 pid = int(f.read().strip())
 
-            # Check if process exists
-            os.kill(pid, 0)
+            # Check if process exists and is a bash/shell process
+            # This helps verify it's actually our terminal script
+            try:
+                with open(f"/proc/{pid}/cmdline", 'r') as cmd_file:
+                    cmdline = cmd_file.read()
+                    # Check if it's our script
+                    if "neo_terminal_script" not in cmdline:
+                        return False
+            except (IOError, FileNotFoundError):
+                return False
+
+            # Process exists and is our terminal
             return True
         except (OSError, ValueError, ProcessLookupError):
             # Process doesn't exist or invalid PID
@@ -105,7 +115,7 @@ class PersistentTerminalExecutor:
             script_path = os.path.join(self.temp_dir, "neo_terminal_script.sh")
             with open(script_path, 'w') as f:
                 f.write('''#!/bin/bash
-echo "$" > %s
+echo $$ > %s
 echo "Neo AI Terminal - DO NOT CLOSE THIS WINDOW"
 echo "This terminal will be used for all Neo AI commands."
 echo "---------------------------------------------------"
@@ -156,39 +166,81 @@ done
             # Make script executable
             os.chmod(script_path, 0o755)
 
-            # Determine terminal command based on desktop environment
+            # Launch terminal more reliably - determine based on desktop environment
             desktop_env = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+            term_cmd = ""
 
             if "gnome" in desktop_env or "unity" in desktop_env:
-                term_cmd = f"gnome-terminal -- {script_path}"
+                term_cmd = f"gnome-terminal -- bash {script_path}"
             elif "kde" in desktop_env or "plasma" in desktop_env:
-                term_cmd = f"konsole -e {script_path}"
+                term_cmd = f"konsole -e bash {script_path}"
             elif "xfce" in desktop_env:
-                term_cmd = f"xfce4-terminal -e {script_path}"
+                term_cmd = f"xfce4-terminal -e 'bash {script_path}'"
             else:
-                # Use detected terminal
-                term_cmd = f"{self.terminal_type} {script_path}"
+                # Use detected terminal with explicit bash
+                term_cmd = f"{self.terminal_type} bash {script_path}"
 
-            # Launch the terminal
-            logging.info(f"Launching persistent terminal: {term_cmd}")
-            self.terminal_process = subprocess.Popen(term_cmd, shell=True)
+            # Log the command we're about to run
+            logging.info(f"Launching persistent terminal with: {term_cmd}")
+            #print_formatted_text(HTML(f"<ansiblue>Launching terminal: {term_cmd}</ansiblue>"))
+
+            # Launch the terminal with nohup to ensure it stays running
+            subprocess.Popen(term_cmd, shell=True,
+                           stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL,
+                           start_new_session=True)
 
             # Wait for terminal to initialize
             wait_count = 0
-            while not os.path.exists(self.pid_file) and wait_count < 10:
+            while not os.path.exists(self.pid_file) and wait_count < 20:
                 time.sleep(0.5)
                 wait_count += 1
+                print(f"\rWaiting for terminal to initialize... {wait_count}/20", end="")
+
+            print()  # New line after waiting
 
             if os.path.exists(self.pid_file):
-                logging.info("Persistent terminal initialized successfully.")
-                print_formatted_text(HTML("<ansigreen>Persistent terminal initialized successfully.</ansigreen>"))
+                with open(self.pid_file, 'r') as f:
+                    pid = f.read().strip()
+                #logging.info(f"Persistent terminal initialized successfully. PID: {pid}")
+                print_formatted_text(HTML(f"<ansigreen>Persistent terminal initialized successfully. PID: {pid}</ansigreen>"))
+                self.terminal_initialized = True
             else:
                 logging.error("Failed to initialize persistent terminal.")
-                print_formatted_text(HTML("<ansired>Failed to initialize persistent terminal. Falling back to new terminals.</ansired>"))
+                print_formatted_text(HTML("<ansired>Failed to initialize persistent terminal. Using fallback method.</ansired>"))
+                self._initialize_fallback()
 
         except Exception as e:
             logging.error(f"Error initializing persistent terminal: {e}")
             print_formatted_text(HTML(f"<ansired>Error initializing persistent terminal: {e}</ansired>"))
+            self._initialize_fallback()
+
+    def _initialize_fallback(self):
+        """Initialize a fallback terminal method."""
+        # Create a simple script that just writes the PID to file
+        script_path = os.path.join(self.temp_dir, "neo_fallback_script.sh")
+        with open(script_path, 'w') as f:
+            f.write(f'''#!/bin/bash
+echo $$ > {self.pid_file}
+echo "Neo AI Fallback Terminal"
+while true; do
+    sleep 1
+done
+''')
+        # Make executable
+        os.chmod(script_path, 0o755)
+
+        # Start a background process
+        subprocess.Popen(['bash', script_path],
+                       stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL,
+                       start_new_session=True)
+
+        # Wait a moment
+        time.sleep(1)
+        if os.path.exists(self.pid_file):
+            logging.info("Fallback terminal method initialized.")
+            self.terminal_initialized = True
 
     def _cleanup(self):
         """Clean up resources on exit."""
@@ -232,17 +284,37 @@ done
             if not self._is_terminal_running():
                 if not self.terminal_initialized:
                     logging.info("First command detected, initializing terminal...")
-                    print_formatted_text(HTML("<ansigreen>Initializing persistent terminal for command execution...</ansigreen>"))
+                    #print_formatted_text(HTML("<ansigreen>Initializing persistent terminal for command execution...</ansigreen>"))
                     self.terminal_initialized = True
                 else:
                     logging.info("Terminal not running, restarting...")
 
                 self._initialize_terminal()
                 # Give it a moment to start
-                time.sleep(1)
+                time.sleep(2)
+
+                # Verify it's running after initialization
+                if not self._is_terminal_running():
+                    logging.error("Terminal failed to initialize properly. Using direct execution.")
+                    # Execute directly as fallback
+                    try:
+                        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+                        with open(self.output_file, 'w') as f:
+                            f.write(result.stdout + "\n" + result.stderr)
+                        # Create lock file to signal completion
+                        with open(self.lock_file, 'w') as f:
+                            pass
+                        return self.output_file
+                    except Exception as direct_exec_error:
+                        logging.error(f"Direct execution also failed: {direct_exec_error}")
+                        with open(self.output_file, 'w') as f:
+                            f.write(f"Error: {direct_exec_error}")
+                        with open(self.lock_file, 'w') as f:
+                            pass
+                        return self.output_file
 
             logging.info(f"Sending command to persistent terminal: {command}")
-            print_formatted_text(HTML(f"<ansiyellow>Executing in persistent terminal:</ansiyellow> <ansiblue>{command}</ansiblue>"))
+           # print_formatted_text(HTML(f"<ansiyellow>Executing in persistent terminal:</ansiyellow> <ansiblue>{command}</ansiblue>"))
 
             # Send command to terminal via FIFO
             with open(self.fifo_path, 'w') as f:
@@ -259,8 +331,9 @@ done
             with open(self.output_file, "w") as f:
                 f.write(f"Error executing command: {e}\n")
 
-            # If terminal fails, try to restart it
-            self._initialize_terminal()
+            # Create lock file to indicate completion
+            with open(self.lock_file, "w") as f:
+                pass
 
             return self.output_file
 
@@ -276,13 +349,16 @@ done
         animation_frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
         frame_index = 0
 
-        print_formatted_text(HTML("<ansicyan>Waiting for command to complete...</ansicyan>"))
+        #print_formatted_text(HTML("<ansicyan>Waiting for command to complete...</ansicyan>"))
 
         while not os.path.exists(self.lock_file):
             elapsed_time = time.time() - start_time
 
             if elapsed_time > max_wait_time:
                 print_formatted_text(HTML("<ansired>Command timed out after 3 minutes</ansired>"))
+                # Create an empty lock file to prevent further hangs
+                with open(self.lock_file, "w") as f:
+                    pass
                 break
 
             # Every 0.2 seconds, update the animation
