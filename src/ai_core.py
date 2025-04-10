@@ -5,7 +5,8 @@ import logging
 import os
 import time
 from src.command_executor import execute_command_in_terminal, execute_command
-from src.utils import parse_hooks, load_persistent_memory
+from src.utils import load_persistent_memory
+from src.mcp_protocol import mcp  # Import the MCP singleton
 import openai
 from src.token_manager import TokenManager
 from src.command_executor import wait_for_command_completion
@@ -108,7 +109,6 @@ class NeoAI:
             )
 
             full_response = ""
-            system_command = ""
             is_first_chunk = True
 
             for chunk in completion:
@@ -124,17 +124,8 @@ class NeoAI:
                         print(content, end='', flush=True)
                         full_response += content
 
-                        if '<s>' in full_response:
-                            system_command = full_response.split('<s>')[-1]
-                        if '</s>' in system_command:
-                            break
-
             print()
-
-            if system_command and '</s>' in system_command:
-                return self._process_response(full_response)
-            else:
-                return full_response.strip()
+            return self._process_response(full_response)
 
         except Exception as e:
             print(f"Error while querying LM Studio: {e}")
@@ -258,72 +249,63 @@ class NeoAI:
             print(traceback.format_exc())
 
     def _process_response(self, response):
+        """
+        Process the AI response and handle MCP protocol commands.
+        This replaces the old system tag processing with the new MCP protocol.
+
+        Args:
+            response: Text response from the AI
+
+        Returns:
+            Processed response with command outputs integrated
+        """
         try:
-            hooks = parse_hooks(response)
-            for hook_type, content in hooks:
-                if hook_type == "s" or hook_type == "system":  # Accept both tag types
-                    # Use the approval handler
-                    approval_handler = ApprovalHandler(self.require_approval, self.auto_approve_all)
-                    approved, option = approval_handler.request_approval(content)
+            # Process all MCP protocol tags using the MCP singleton
+            mcp_results = mcp.process_response(
+                response,
+                require_approval=self.require_approval,
+                auto_approve=self.auto_approve_all
+            )
 
-                    if not approved:
-                        return "Command execution was denied."
-                    elif option == 'all':
-                        self.auto_approve_all = True
+            # Log the MCP results for debugging
+           # print(f"DEBUG - MCP results: {mcp_results}")
 
-                    # Execute the command with the new executor
-                    temp_file = execute_command_in_terminal(content)
-                    if temp_file:
-                        result = wait_for_command_completion(temp_file)
+            # Check if any protocols were executed
+            follow_up_messages = []
 
-                        # Send the result as a new message
-                        follow_up_prompt = f"The command '{content}' was executed. Here is the result:\n{result}"
-                        self.history.append({"role": "user", "content": follow_up_prompt})
+            for protocol, result in mcp_results.items():
+                # Skip error key or non-dict results
+                if protocol == "error" or not isinstance(result, dict):
+                    continue
 
-                        if self.mode == "digital_ocean":
-                            return self._query_digitalocean(follow_up_prompt)
-                        elif self.mode == "lm_studio":
-                            return self._query_lm_studio(follow_up_prompt)
-                        else:
-                            return f"Unknown mode: {self.mode}. Unable to send follow-up prompt."
-                    else:
-                        return "Error: Failed to execute the command."
+                # Check if the protocol was executed
+                if result.get("executed", False):
+                    command = result.get("command", "unknown command")
+                    output = result.get("output", "No output")
+
+                    # Create a follow-up message for this protocol
+                    follow_up_prompt = f"The {protocol} command '{command}' was executed. Here is the result:\n{output}"
+                    follow_up_messages.append(follow_up_prompt)
+
+            # If we have follow-up messages, send them to the AI
+            if follow_up_messages:
+                combined_prompt = "\n\n".join(follow_up_messages)
+                self.history.append({"role": "user", "content": combined_prompt})
+
+                if self.mode == "digital_ocean":
+                    return self._query_digitalocean(combined_prompt)
+                elif self.mode == "lm_studio":
+                    return self._query_lm_studio(combined_prompt)
+                else:
+                    return f"Unknown mode: {self.mode}. Unable to send follow-up prompt."
 
         except Exception as e:
             import traceback
             print(f"\nAn unexpected error occurred while processing the response: {e}")
             print(traceback.format_exc())
-            return "An error occurred while processing the system command."
+            return "An error occurred while processing the command."
 
         return response.strip()
-
-    def _get_ai_response(self, instruction):
-        messages = self.history + [{"role": "user", "content": instruction}]
-
-        completion = openai.ChatCompletion.create(
-            model=self.model,
-            messages=messages,
-            temperature=0.7,
-            stream=self.is_streaming_mode,
-        )
-
-        full_response = ""
-        system_command = ""
-
-        for chunk in completion:
-            if 'choices' in chunk and len(chunk['choices']) > 0:
-                content = chunk['choices'][0]['delta'].get('content', '')
-                if content:
-                    full_response += content
-
-                    if '<s>' in full_response:
-                        system_command = full_response.split('<s>')[-1]
-                    if '</s>' in system_command:
-                        break
-
-        if system_command and '</s>' in system_command:
-            return self._process_response(full_response)
-        return full_response.strip()
 
     def get_conversation_history(self):
         return self.history
