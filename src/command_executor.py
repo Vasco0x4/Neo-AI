@@ -1,6 +1,6 @@
 """
 Persistent terminal executor for Neo AI.
-Uses a single reusable terminal window for all commands.
+Uses a single reusable terminal window for all commands with enhanced sudo handling.
 """
 
 import subprocess
@@ -11,7 +11,68 @@ import tempfile
 import shlex
 import signal
 import atexit
+import re
 from prompt_toolkit import print_formatted_text, HTML
+
+# Define sudo-specific enhancements
+class SudoCommandHandler:
+    """Handle sudo-specific command execution details."""
+
+    def __init__(self):
+        """Initialize sudo handler."""
+        self.sudo_log_file = os.path.join(tempfile.gettempdir(), "neo_sudo_log.txt")
+        self.sudo_pattern = re.compile(r'^sudo\s+|[;&|]\s*sudo\s+', re.MULTILINE)
+        self.dangerous_sudo_commands = [
+            r'sudo\s+(rm|dd|mkfs|fdisk|parted|shred)\s+',
+            r'sudo\s+.*(remove|delete|format|wipe|reset).*',
+            r'sudo\s+(halt|reboot|poweroff|shutdown)\s+',
+            r'sudo\s+chown\s+-R\s+',
+            r'sudo\s+chmod\s+-R\s+',
+            r'sudo\s+systemctl\s+(disable|stop|mask)\s+'
+        ]
+
+        # Initialize sudo log
+        if not os.path.exists(self.sudo_log_file):
+            with open(self.sudo_log_file, 'w') as f:
+                f.write("# Neo AI Sudo Command Log\n")
+                f.write("# Format: [Timestamp] [Command] [Exit Code]\n\n")
+
+    def is_sudo_command(self, command):
+        """Check if a command uses sudo."""
+        return bool(self.sudo_pattern.search(command))
+
+    def is_dangerous_sudo(self, command):
+        """Check if a sudo command is potentially dangerous."""
+        for pattern in self.dangerous_sudo_commands:
+            if re.search(pattern, command):
+                return True
+        return False
+
+    def log_sudo_command(self, command, exit_code):
+        """Log sudo command execution for security auditing."""
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(self.sudo_log_file, 'a') as f:
+            f.write(f"[{timestamp}] [{command}] [Exit code: {exit_code}]\n")
+
+    def sanitize_sudo_command(self, command):
+        """
+        Apply safety enhancements to sudo commands.
+
+        This adds safeguards like -p for predictable password prompts
+        and prevents certain dangerous patterns.
+        """
+        # Don't modify commands that use pipes after sudo
+        if '|' in command and self.is_sudo_command(command):
+            return command
+
+        # Add sudo password prompt to make it more consistent
+        if command.startswith('sudo '):
+            # Check if -p is already present
+            if not re.search(r'sudo\s+(-[a-zA-Z]*p|-p)\s+', command):
+                # Insert custom prompt after sudo
+                command = re.sub(r'^sudo\s+', 'sudo -p "[sudo] password for %p: " ', command)
+
+        return command
 
 class PersistentTerminalExecutor:
     """Execute commands using a single persistent terminal window."""
@@ -26,6 +87,7 @@ class PersistentTerminalExecutor:
         self.terminal_type = self._detect_terminal_type()
         self.terminal_process = None
         self.terminal_initialized = False
+        self.sudo_handler = SudoCommandHandler()  # Intégration du gestionnaire sudo
 
         # Set up logging
         logging.basicConfig(
@@ -263,7 +325,7 @@ done
 
     def execute_command(self, command):
         """
-        Execute a command in the persistent terminal.
+        Execute a command in the persistent terminal with sudo support.
 
         Args:
             command (str): Command to execute
@@ -271,6 +333,23 @@ done
         Returns:
             str: Path to the output file
         """
+        # Check for sudo and handle it appropriately
+        is_sudo = self.sudo_handler.is_sudo_command(command)
+        is_dangerous = self.sudo_handler.is_dangerous_sudo(command)
+
+        # Log and notify for sudo commands
+        if is_sudo:
+            logging.info(f"Executing sudo command: {command}")
+            # Sanitize sudo command
+            command = self.sudo_handler.sanitize_sudo_command(command)
+
+            # Additional warning for dangerous commands
+            if is_dangerous:
+                logging.warning(f"Executing potentially dangerous sudo command: {command}")
+                print_formatted_text(HTML(
+                    f"<ansired>⚠️ Executing command with elevated privileges</ansired>"
+                ))
+
         # Remove any existing lock file
         if os.path.exists(self.lock_file):
             os.unlink(self.lock_file)
@@ -304,6 +383,11 @@ done
                         # Create lock file to signal completion
                         with open(self.lock_file, 'w') as f:
                             pass
+
+                        # Log sudo command execution if applicable
+                        if is_sudo:
+                            self.sudo_handler.log_sudo_command(command, result.returncode)
+
                         return self.output_file
                     except Exception as direct_exec_error:
                         logging.error(f"Direct execution also failed: {direct_exec_error}")
@@ -314,7 +398,12 @@ done
                         return self.output_file
 
             logging.info(f"Sending command to persistent terminal: {command}")
-           # print_formatted_text(HTML(f"<ansiyellow>Executing in persistent terminal:</ansiyellow> <ansiblue>{command}</ansiblue>"))
+
+            # Special handling for sudo commands
+            if is_sudo:
+                print_formatted_text(HTML(f"<ansiyellow>Executing command with elevated privileges:</ansiyellow> <ansiblue>{command}</ansiblue>"))
+            else:
+                print_formatted_text(HTML(f"<ansiyellow>Executing in persistent terminal:</ansiyellow> <ansiblue>{command}</ansiblue>"))
 
             # Send command to terminal via FIFO
             with open(self.fifo_path, 'w') as f:
@@ -340,6 +429,7 @@ done
     def wait_for_command_completion(self):
         """
         Wait for the command to complete by checking for the lock file.
+        Enhanced with sudo-specific handling.
 
         Returns:
             str: Command output
@@ -374,7 +464,13 @@ done
         try:
             if os.path.exists(self.output_file):
                 with open(self.output_file, "r") as f:
-                    return f.read()
+                    output = f.read()
+
+                # Check for sudo password prompts in the output
+                if "[sudo] password for" in output and "Sorry, try again" in output:
+                    print_formatted_text(HTML("<ansired>Sudo authentication failed. Password may be incorrect.</ansired>"))
+
+                return output
             else:
                 return "No output was captured. The command may have failed to execute properly."
         except Exception as e:
@@ -391,12 +487,18 @@ def execute_command(command):
     Returns:
         str: Command output or error message
     """
+    # Check for sudo commands
+    sudo_handler = SudoCommandHandler()
+    is_sudo = sudo_handler.is_sudo_command(command)
+
     try:
         # Log the command
         logging.debug(f"Executing simple command: {command}")
+        if is_sudo:
+            logging.info(f"Executing sudo command directly: {command}")
 
         # Determine if command needs shell
-        needs_shell = any(char in command for char in ['|', '>', '<', '&', ';', '*', '`'])
+        needs_shell = any(char in command for char in ['|', '>', '<', '&', ';', '*', '`']) or is_sudo
 
         # Execute the command
         if needs_shell:
@@ -404,6 +506,10 @@ def execute_command(command):
         else:
             args = shlex.split(command)
             result = subprocess.run(args, capture_output=True, text=True, timeout=30)
+
+        # Log sudo command execution
+        if is_sudo:
+            sudo_handler.log_sudo_command(command, result.returncode)
 
         # Return the result
         if result.returncode == 0:

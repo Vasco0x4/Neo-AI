@@ -1,8 +1,3 @@
-"""
-Enhanced command display and output formatting for Neo AI.
-This module handles the visual presentation of commands and their outputs.
-"""
-
 import re
 import os
 import shutil
@@ -19,6 +14,7 @@ OUTPUT_STYLE = Style.from_dict({
     'warning': '#ffa07a',       # Light Salmon
     'system': '#d8bfd8 italic', # Thistle
     'highlight': '#40e0d0',     # Turquoise
+    'sudo': '#ff5555 bold',     # Bright red for sudo commands
 })
 
 class CommandDisplay:
@@ -31,20 +27,39 @@ class CommandDisplay:
 
         # Patterns for formatting
         self.cmd_pattern = re.compile(r'<s>(.*?)</s>', re.DOTALL)
-        self.error_pattern = re.compile(r'Error:|ERROR:|Failed:', re.IGNORECASE)
-        self.success_pattern = re.compile(r'Success:|Completed:|Done:', re.IGNORECASE)
+        self.error_pattern = re.compile(r'Error:|ERROR:|Failed:|fail|permission denied', re.IGNORECASE)
+        self.success_pattern = re.compile(r'Success:|Completed:|Done:|successful', re.IGNORECASE)
         self.warning_pattern = re.compile(r'Warning:|WARN:|Caution:', re.IGNORECASE)
 
+        # Additional patterns for sudo detection
+        self.sudo_pattern = re.compile(r'^sudo\s+|[;&|]\s*sudo\s+', re.MULTILINE)
+
+        # Patterns for specific command output interpretation
+        self.apt_update_pattern = re.compile(r'(\d+)\s+packages can be upgraded')
+        self.disk_usage_pattern = re.compile(r'(\d+)%\s+\/')
+
+    def is_sudo_command(self, command):
+        """Check if a command uses sudo."""
+        return command.strip().startswith('sudo ') or re.search(r'[;&|]\s*sudo\s+', command)
+
     def format_command(self, command):
-        """Format a command for display."""
-        return f"\n{'─' * self.term_width}\n📎 <command>{command}</command>\n{'─' * self.term_width}"
+        """Format a command for display with sudo highlighting."""
+        if self.is_sudo_command(command):
+            # Add sudo icon and highlight
+            return f"\n{'─' * self.term_width}\n🔐 <sudo>{command}</sudo>\n{'─' * self.term_width}"
+        else:
+            # Regular command formatting
+            return f"\n{'─' * self.term_width}\n📎 <command>{command}</command>\n{'─' * self.term_width}"
 
     def format_output(self, output, command):
-        """Format command output with syntax highlighting."""
-        # Determine if output contains errors
+        """Format command output with syntax highlighting and enhanced interpretation."""
+        # Determine if output contains errors, warnings, etc.
         has_error = bool(self.error_pattern.search(output))
         has_warning = bool(self.warning_pattern.search(output))
         has_success = bool(self.success_pattern.search(output))
+
+        # Special formatting for sudo commands
+        is_sudo = self.is_sudo_command(command)
 
         # Format output based on content
         formatted_output = output
@@ -68,17 +83,51 @@ class CommandDisplay:
             style_class = 'output'
             icon = "📄"
 
+        # Add sudo indicator for sudo commands if not already showing an error
+        if is_sudo and not has_error:
+            icon = "🔒"
+            if has_success:
+                icon = "🔓✅"  # Unlocked with success
+
+        # Try to extract meaningful information from common command outputs
+        summary = self.generate_output_summary(output, command)
+        if summary:
+            formatted_output += f"\n\n<highlight>Summary:</highlight> {summary}"
+
         # Format the final output with headers
         result = f"\n{icon} <{style_class}>{formatted_output}</{style_class}>\n"
         result += f"{'─' * self.term_width}\n"
 
         return result
 
+    def generate_output_summary(self, output, command):
+        """Generate a helpful summary based on command output patterns."""
+        # Detect apt update results
+        apt_match = self.apt_update_pattern.search(output)
+        if apt_match and 'apt update' in command:
+            return f"{apt_match.group(1)} packages can be upgraded. Consider running 'sudo apt upgrade' to install them."
+
+        # Detect disk usage warnings
+        disk_match = self.disk_usage_pattern.search(output)
+        if disk_match and 'df' in command:
+            usage = int(disk_match.group(1))
+            if usage > 90:
+                return f"Warning: Disk usage is at {usage}%, which is very high. Consider freeing up space."
+            elif usage > 75:
+                return f"Note: Disk usage is at {usage}%, getting close to threshold."
+
+        # If no specific pattern matched
+        return None
+
     def print_command_execution(self, command):
         """Print a notification that a command is being executed."""
         formatted_cmd = self.format_command(command)
         print_formatted_text(HTML(formatted_cmd), style=OUTPUT_STYLE)
-        print_formatted_text(HTML("<s>Executing command...</s>"), style=OUTPUT_STYLE)
+
+        if self.is_sudo_command(command):
+            print_formatted_text(HTML("<sudo>Executing with elevated privileges...</sudo>"), style=OUTPUT_STYLE)
+        else:
+            print_formatted_text(HTML("<system>Executing command...</system>"), style=OUTPUT_STYLE)
 
     def print_command_output(self, output, command):
         """Print the formatted output of a command."""
@@ -94,7 +143,10 @@ class CommandDisplay:
         """Replace <s> tags with visually formatted command displays."""
         def replacement(match):
             cmd = match.group(1).strip()
-            return f"\n**Command:** `{cmd}`\n"
+            if self.is_sudo_command(cmd):
+                return f"\n**Sudo Command:** `{cmd}`\n"
+            else:
+                return f"\n**Command:** `{cmd}`\n"
 
         return self.cmd_pattern.sub(replacement, text)
 
@@ -119,14 +171,28 @@ class CommandDisplay:
         if line:
             command_lines.append(line)
 
-        # Build the message box
+        # Build the message box with sudo highlighting if needed
         message = [top_border]
-        message.append("│ <warning>Command Approval Required:</warning>" + " " * (box_width - 29) + "│")
+
+        if self.is_sudo_command(command):
+            message.append("│ <sudo>🔐 Sudo Command Approval Required:</sudo>" + " " * (box_width - 38) + "│")
+        else:
+            message.append("│ <warning>Command Approval Required:</warning>" + " " * (box_width - 29) + "│")
+
         for line in command_lines:
             padding = " " * (box_width - 4 - len(line))
-            message.append(f"│ <command>{line}</command>{padding} │")
+            if self.is_sudo_command(command):
+                message.append(f"│ <sudo>{line}</sudo>{padding} │")
+            else:
+                message.append(f"│ <command>{line}</command>{padding} │")
+
         message.append("│" + " " * (box_width - 2) + "│")
-        message.append("│ <s>Approve? (y/n/T for approve all)</s>" + " " * (box_width - 37) + "│")
+
+        if self.is_sudo_command(command):
+            message.append("│ <sudo>Approve? (y/n) - requires elevated privileges</sudo>" + " " * (box_width - 49) + "│")
+        else:
+            message.append("│ <system>Approve? (y/n/T for approve all)</system>" + " " * (box_width - 37) + "│")
+
         message.append(bottom_border)
 
         return "\n".join(message)
