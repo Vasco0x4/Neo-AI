@@ -89,7 +89,7 @@ class NetworkProtocolHandler(ProtocolHandler):
                 target = command[5:].strip()
                 target = shlex.quote(target)
                 terminal_result = terminal_handler.handle(
-                    f"nmap -F {target} 2>/dev/null || echo 'nmap not installed - please install nmap to use scan functionality'",
+                    f"nmap -F {target} 2>/dev/null",
                     require_approval, auto_approve
                 )
                 terminal_result["network_operation"] = "scan"

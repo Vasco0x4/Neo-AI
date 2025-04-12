@@ -1,6 +1,6 @@
 """
-Analyze protocol handler for MCP.
-This protocol handles system analysis operations.
+Simplified analyze protocol handler for MCP.
+This protocol handles comprehensive system analysis operations in one command.
 """
 
 import logging
@@ -26,31 +26,12 @@ class AnalyzeProtocolHandler(ProtocolHandler):
         """Initialize the analyze protocol handler."""
         super().__init__("analyze")
 
-        # Define the analysis commands
-        self.analyze_commands = {
-            "disk": "df -h",
-            "memory": "free -h",
-            "cpu": "top -bn1 | head -15",
-            "processes": "ps aux | sort -rk 3,3 | head -n 10",
-            "users": "who",
-            "network": "ifconfig || ip addr",
-            "system": "uname -a && lsb_release -a 2>/dev/null || cat /etc/*release 2>/dev/null",
-            "io": "iostat 2>/dev/null || echo 'iostat command not found'",
-            "hardware": "lshw -short 2>/dev/null || echo 'lshw command not found'",
-            "packages": "dpkg -l 2>/dev/null || rpm -qa 2>/dev/null || pacman -Q 2>/dev/null || echo 'Package manager not detected'",
-            "services": "systemctl list-units --type=service --state=running 2>/dev/null || service --status-all 2>/dev/null || echo 'Service manager not detected'",
-            "modules": "lsmod | head -20",
-            "space": "du -sh /* 2>/dev/null | sort -hr",
-            "temperature": "sensors 2>/dev/null || echo 'sensors command not found'",
-            "logfiles": "ls -la /var/log/ | tail -20"
-        }
-
     def handle(self, command: str, require_approval: bool, auto_approve: bool) -> Dict[str, Any]:
         """
-        Handle analyze protocol commands (system analysis).
+        Handle analyze protocol commands - always performs a full system analysis.
 
         Args:
-            command: The analyze command
+            command: The analyze command (ignored)
             require_approval: Whether approval is required
             auto_approve: Whether to auto-approve
 
@@ -58,43 +39,45 @@ class AnalyzeProtocolHandler(ProtocolHandler):
             Dictionary with execution results
         """
         result = {
-            "command": command,
+            "command": "full system analysis",
             "executed": False,
             "output": ""
         }
 
         try:
-            if command in self.analyze_commands:
-                logger.debug(f"Processing analyze command: {command}")
-                analysis_command = self.analyze_commands[command]
+            logger.debug("Processing full system analysis command")
 
-                # Execute the analysis command using terminal protocol
-                terminal_result = terminal_handler.handle(
-                    analysis_command, require_approval, auto_approve
-                )
+            # Build a comprehensive system analysis command
+            analysis_command = (
+                "echo '===== SYSTEM OVERVIEW ====='\n"
+                "echo '• System:' && uname -a\n"
+                "echo '• Kernel:' && uname -r\n"
+                "echo '• Hostname:' && hostname\n"
+                "echo '• Current User:' && whoami\n"
+                "echo '• Uptime:' && uptime\n"
+                "echo\n"
+                "echo '===== RESOURCES ====='\n"
+                "echo '• Memory:' && free -h\n"
+                "echo '• Disk:' && df -h\n"
+                "echo '• CPU Load:' && top -bn1 | head -3\n"
+                "echo '• Top CPU Processes:' && ps aux --sort=-%cpu | head -5\n"
+                "echo '• Top Memory Processes:' && ps aux --sort=-%mem | head -5\n"
+                "echo\n"
+                "echo '===== NETWORK ====='\n"
+                "echo '• Network Interfaces:' && ip -br addr 2>/dev/null || ifconfig\n"
+                "echo '• Listening Ports:' && ss -tuln 2>/dev/null || netstat -tuln | head -10\n"
+                "echo\n"
+                "echo '===== SERVICES ====='\n"
+                "echo '• Running Services:' && systemctl list-units --type=service --state=running 2>/dev/null | head -5 || service --status-all 2>/dev/null | grep ' + ' | head -5\n"
+            )
 
-                # Add analysis type to result
-                terminal_result["analysis_type"] = command
-                return terminal_result
+            # Execute the analysis command using terminal protocol
+            terminal_result = terminal_handler.handle(
+                analysis_command, require_approval, auto_approve
+            )
 
-            elif command.startswith("custom:"):
-                # Custom analysis - format: custom:command
-                logger.debug(f"Processing custom analyze command: {command}")
-                custom_command = command[7:].strip()
-
-                # Execute the custom command using terminal protocol
-                terminal_result = terminal_handler.handle(
-                    custom_command, True, False  # Always require approval for custom commands
-                )
-
-                # Add analysis type to result
-                terminal_result["analysis_type"] = "custom"
-                return terminal_result
-
-            else:
-                valid_commands = ", ".join(sorted(self.analyze_commands.keys()))
-                result["output"] = f"Unknown analysis command. Valid options: {valid_commands} or use custom:command"
-                logger.warning(f"Unknown analysis command: {command}")
+            terminal_result["analysis_type"] = "full"
+            return terminal_result
 
         except Exception as e:
             logger.error(f"Error processing analyze command: {str(e)}")

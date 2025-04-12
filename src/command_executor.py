@@ -202,8 +202,8 @@ done
             if os.path.exists(self.pid_file):
                 with open(self.pid_file, 'r') as f:
                     pid = f.read().strip()
-                #logging.info(f"Persistent terminal initialized successfully. PID: {pid}")
-                print_formatted_text(HTML(f"<ansigreen>Persistent terminal initialized successfully. PID: {pid}</ansigreen>"))
+                logging.info(f"Persistent terminal initialized successfully. PID: {pid}")
+                #print_formatted_text(HTML(f"<ansigreen>Persistent terminal initialized successfully. PID: {pid}</ansigreen>"))
                 self.terminal_initialized = True
             else:
                 logging.error("Failed to initialize persistent terminal.")

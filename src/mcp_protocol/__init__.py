@@ -7,17 +7,13 @@ import logging
 from .core import MCPProtocol
 from .registry import ProtocolRegistry
 
-# Import all protocol handlers
+# Import only the required protocol handlers
 from .handlers import (
     terminal_protocol,
-    memory_protocol,
     files_protocol,
-    search_protocol,
     analyze_protocol,
     network_protocol,
-    security_protocol,
-    monitor_protocol,
-    state_protocol
+    security_protocol
 )
 
 # Configure logging
@@ -33,14 +29,10 @@ def register_all_protocols():
     """Register all available protocol handlers."""
     protocols = [
         terminal_protocol,
-        memory_protocol,
         files_protocol,
-        search_protocol,
         analyze_protocol,
         network_protocol,
-        security_protocol,
-        monitor_protocol,
-        state_protocol
+        security_protocol
     ]
 
     for protocol in protocols:
