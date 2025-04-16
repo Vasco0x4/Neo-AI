@@ -69,6 +69,8 @@ nano config/config.yaml
 source ~/.bashrc
 neo
 ```
+> Note maybe you need to restart you terminal
+
 
 ## 🔧 Configuration
 
@@ -119,11 +121,8 @@ You: List all running processes
 Neo: I'll use the `ps` command to list all running processes.
 <mcp:terminal>ps aux</mcp:terminal>
 
-╭─ Command ───────────────────────────────────────╮
-│  ps aux                                         │
-╰─ Execute? (y/n/t) ───────────────────────────────╯
-
-y
+neo > ps aux
+  ↳ Execute this command? [Enter/n]: _
 
 Here are the top processes by CPU usage:
 1. firefox (23.4%)
@@ -137,14 +136,10 @@ You: Can you scan my local network?
 Neo: I'll scan your local network. This may take a moment:
 <mcp:network>scan:192.168.1.0/24</mcp:network>
 
-╭─ Command ───────────────────────────────────────╮
-│  nmap -F 192.168.1.0/24                        │
-╰─ Execute? (y/n/t) ───────────────────────────────╯
-
-y
+neo > nmap -F 192.168.1.0/24
+  ↳ Execute this command? [Enter/n]: _
 
 Found 12 active devices:
-...
 ```
 
 ## 🔐 Security
