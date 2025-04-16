@@ -54,6 +54,7 @@ cd neo-ai
 2. Run the installation script:
 ```bash
 ./install.sh
+echo "alias neo='source $(pwd)/venv/bin/activate && python3 $(pwd)/main.py'" >> ~/.bashrc
 ```
 
 3. Configure Neo:
