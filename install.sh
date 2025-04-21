@@ -1,6 +1,7 @@
 #!/bin/bash
 
-DEBUG=1
+# Set debug mode to 0 to disable debug messages
+DEBUG=0
 function debug() {
     if [ "$DEBUG" -eq 1 ]; then
         echo "DEBUG: $1"
@@ -17,7 +18,7 @@ check_python_version() {
     if command -v python3 &>/dev/null; then
         PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
         debug "Found Python version: $PYTHON_VERSION"
-        
+
         # Use Python for version comparison
         python3 - <<EOF
 import sys
@@ -86,6 +87,8 @@ pyyaml==6.0.1
 pynput==1.7.7
 httpx==0.28.1
 PyJWT==2.10.1
+prompt_toolkit==3.0.43
+pygments==2.17.2
 EOL
 
     pip install -r requirements.txt || handle_pyaudio_error

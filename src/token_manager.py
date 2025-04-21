@@ -4,10 +4,8 @@ import json
 import os
 import logging
 import tempfile
-import urllib.parse
 
-logging.disable(logging.CRITICAL)  # Disable for logging
-
+logging.disable(logging.CRITICAL)  # Disable logging
 
 class TokenManager:
     def __init__(self, agent_id, agent_key, auth_api_url):
@@ -21,10 +19,9 @@ class TokenManager:
     def _request(self, method, endpoint, headers=None, params=None, data=None):
         try:
             url = f"{self.auth_api_url}{endpoint}"
-
-            client = httpx.Client(transport=httpx.HTTPTransport(proxy=None))
-
-            response = client.request(method, url, headers=headers, params=params, json=data)
+            # Using httpx.request directly instead of creating a client
+            # This method helps bypass proxy usage
+            response = httpx.request(method, url, headers=headers, params=params, json=data)
             response.raise_for_status()
             return response.json()
         except httpx.RequestError as e:
